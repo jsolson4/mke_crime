@@ -1,0 +1,438 @@
+---
+title: "codebook_mke_crime"
+author: "Justin Olson"
+date: "March 20, 2019"
+output: html_document
+---
+# Executive Summary
+The ```mke_crime dataset``` contains 666,790  reports of Group A Offenses documented by The City of Milwaukee. The data were downloaded through the city of Milwaukee Open data portal: https://data.milwaukee.gov/
+
+# Necessary Libraries
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(tidyverse)
+library(knitr)
+library(ggmap)  
+library(data.table)
+library(lubridate)
+library(photon)
+library(svMisc)
+library(hms)
+library(readr)
+library(gtools)
+library(reshape2)
+library(RColorBrewer)
+library(ggpubr)
+library(gridExtra)
+library(cowplot)
+library(mgcv)
+library(dbscan)
+library(xtable)
+library(grid)
+library(maps)
+library(MASS)
+library(viridis)
+library(colorspace)
+library(scales)
+library(zoo)
+
+opts_knit$set(root.dir = "C:/Users/Justin Olson/Projects/Crime/mke_open_data/")
+
+
+```
+
+#Download the crime data from the MKE open data webpage
+```{r}
+location <- "https://data.milwaukee.gov/dataset/e5feaad3-ee73-418c-b65d-ef810c199390/resou# rce/87843297-a6fa-46d4-ba5d-cb342fb2d3bb/download/wibr.csv" # download date: 3/4/2019
+
+destination <- "your destination path here"
+
+download.file(url = location, destfile = destination)
+```
+
+#Read in the data
+```{r}
+mke_data <- fread("wibr.csv", stringsAsFactors = FALSE)
+```
+
+#Data Cleaning: Sample only complete cases, create additional Date & Time variables as needed for time-based visualizations, create Address variable for geocoding.
+```{r}
+ # remove incomplete cases (when ReportedDateTime, Location, RoughX, and RoughY values not provoded)
+complete_mke <- mke_data[complete.cases(mke_data[,c(2,3,11,12)])]
+
+# create time-based variables
+mke <- complete_mke %>% mutate(date_time = ymd_hms(ReportedDateTime, tz = "CST6CDT")) %>% mutate(time = as.hms(date_time), hour = hour(date_time), weekday = wday(date_time), month = month(date_time), year = year(date_time), date = as.Date(date_time), yearmonthf = factor(as.yearmon(date)), week = week(date), monthday = mday(date), monthweek= ceiling(monthday/7), monthf = month(date_time, label = TRUE, abbr =TRUE), weekdayf = wday(date, label = TRUE, abbr = TRUE))
+
+# Add address data
+mke <- mke %>% mutate(city = "Milwaukee", state = "WI", country = " United States") %>% mutate(address = paste(Location,", ", city, ", ", state, " ", ZIP, country, sep = ""))
+
+mke_subset <- mke %>% dplyr::select(1,"WeaponUsed","POLICE", 13:35)
+
+# melt data to create one 'crime' column.
+mke_melt <- mke_subset %>% melt(id.vars = c("IncidentNum", "WeaponUsed","POLICE", "date_time","date", "time", "hour", "weekday", "month", "year", "yearmonthf", "week", "monthweek", "monthday", "monthf", "weekdayf"))
+
+# Rename the crime column
+colnames(mke_melt)[17] <- "crime"
+
+# Filter data based on the crime that occurred. Select crime occurring before 2019.
+mke_melt <-  mke_melt %>% filter(value > 0) %>% filter(year < 2019)
+```
+### Section: Visualize the time/date-based data ####
+# Explore crime rate and hour of the day
+```{r}
+# Group data by hour and summarize
+crime_hour <- group_by(mke_melt, hour) %>% summarise(n = n())
+
+# Plot Various CrimeS by hour of the day
+ggplot(crime_hour, aes(x = hour, y = n)) + geom_line(size = 2.5, alpha = 0.7, color = "blue") + xlab(label = "Hour (24-hr clock)") + ylab(label = "Total Crime Reports") + ggtitle(label = "Total Crime Reports by Hour of the Day in Milwaukee 2005-2018") +
+  theme(plot.title = element_text(hjust = 0.5)) + scale_x_continuous(breaks = round(seq(min(crime_hour$hour), max(crime_hour$hour), by = 2),1)) +theme_bw()
+```
+
+# Various Crimes per hour of the day in Milwaukee
+```{r}
+# Organize data by hour:
+hour_crime_group <- group_by(mke_melt, hour, crime)
+hour_crime <- summarize(hour_crime_group, n=n())
+
+# Crime by hour of Day facet plot
+ggplot(data = hour_crime, aes(x=hour, y= n, color = crime)) + geom_line(size=1.5) + 
+  ggtitle('Crime Type by Hour of the Day') + labs(subtitle = "Crime Reported in Milwaukee 2005-2018")+
+  ylab('Total Crime Reports') + xlab('Hour (24-hour clock)') + theme_bw() + 
+  theme(plot.title = element_text(size = 16), axis.title = element_text(size = 12, face = "bold")) + 
+  scale_x_continuous(breaks = round(seq(min(hour_crime$hour), max(hour_crime$hour), by = 4),1)) +
+ facet_wrap(~crime) +theme(plot.subtitle = element_text( face = "italic", size=10, hjust = 0.0, color="black"), legend.position = "none")
+
+```
+
+# Explore relationship between crime and weekday
+```{R}
+# Organize data by weekday
+weekday_crime_total <- group_by(mke_melt, weekday)
+weekday_total <- summarize(weekday_crime_total, n = n())
+wd_mean <- weekday_total %>% summarize(n = mean(n))
+
+colnames(wd_mean)[1] <- "mean"
+
+# plot total crimes for each weekday
+ggplot(weekday_total, aes(x = as.factor(weekday), y = n)) + geom_bar(stat = "identity", color = "darkblue", fill = "blue") + ggtitle("Total Crimes Reported by Weekday for Milwaukee 2005-2018") + labs(subtitle = "No relationship between reported crime totals & day (one-way ANOVA, p-value = 0.287)")+ xlab("Weekday") + ylab(" Total Crimes Reported") +  scale_x_discrete( labels = c("1" = "Monday", "2" = "Tuesday", "3" = "Wednesday", "4" = "Thursday", "5" = "Friday", "6" = "Saturday", "7" = "Sunday")) + ylim(0,120000) + theme_bw() + geom_hline(data = wd_mean, aes(yintercept = mean), color = "red", linetype = "dashed")+ annotate("text", max(weekday_total$weekday), y = 100000, label = "mean", color = "red", hjust = -0.1, parse = TRUE)+theme(plot.subtitle = element_text( face = "italic", size=10, hjust = 0, color="black"))
+```
+
+One-way ANOVA: day vs crime total
+```{r}
+res.aov <- aov(n~weekday, data = weekday_total)
+summary(res.aov)
+```
+
+# crimes by month
+```{r}
+# Total crime rates by month
+m_crime <- mke_melt %>% filter(year > 2005) %>% group_by(month) %>% summarize(n = n())
+
+# plot
+ggplot(m_crime, aes(x = month, y = n)) + geom_line( color = "blue", size = 2) + ggtitle("Total Crime Rates by Month for Milwaukee (2006-2018)") + xlab("Month") + ylab("Total Number of Crime Reports") + scale_x_continuous(breaks = c(1,2,3,4,5,6,7,8,9,10,11,12)) + ylim(35000, 60000) + theme_bw()
+```
+
+Visualize individual crimes over a year
+```{r}
+# Individual Crimes over year
+month_crime <- mke_melt %>% filter(year > 2005) %>% group_by(crime, month) %>% summarize(n = n())
+
+ggplot(month_crime, aes(x = month, y = n, color = crime)) + geom_line(size = 1.5) + ggtitle("Crime Rates by Month for Milwaukee") + xlab("Month") + ylab("Total Reported Crime") + scale_x_continuous(breaks = c(1,3,5,7,9,11)) + theme_bw() + labs(color = "Crime") + labs(subtitle = "Combined totals for 2006-2018")+ facet_wrap(~crime)+
+  theme(plot.subtitle = element_text( face = "italic", size=10, hjust = 0.1, color="black"), legend.position = "none")
+
+```
+
+# Plot crime Heatmap 
+```{r}
+# calculate the total reported crimes per date
+crime_per_date <- mke_melt %>% filter(year > 2013) %>% group_by(date, year, monthf, monthweek, weekdayf) %>% summarise(n = n())
+
+ggplot(crime_per_date, aes(monthweek, weekdayf, fill = n )) + geom_tile(colour = "white") + facet_grid(year~monthf) +  scale_fill_gradient(low="purple", high="yellow") +
+  labs(x="Week of Month", y="Day of the Week", title = "Time-Series Crime Heatmap for Milwaukee 2013-2018",fill= "Crime Count") + theme(plot.title = element_text(hjust = 0.5, size = 15), plot.subtitle = element_text(size = 10), axis.text.x = element_text(size = 7, face = "bold"), axis.text.y = element_text(size = 7, face = "bold"))
+```
+
+Plot crime by day of the month
+```{r}
+month_day <- mke_melt %>% group_by(monthday) %>% summarize(n = n())%>% filter(monthday < 29) 
+
+ggplot( month_day, aes(x = monthday, y = n, )) + ggtitle("Total Reported Crime by Day of the Month") + xlab("Day of the Month") + labs(subtitle = "City of Milwaukee, 2005-2018") + ylab("Total Number of Reported Crimes") + geom_line(color = "blue", size = 2) + scale_x_continuous(breaks = c(1:28)) + theme_bw() + theme(plot.subtitle= element_text(size = 10, face = "italic"))
+```
+
+
+# total crimes per year
+```{r}
+# group data by year
+crime_per_year <- mke_melt %>% group_by(year) %>% summarize(n=n())
+crime_per_year <- crime_per_year %>% filter(year < 2019) %>% filter(year > 2005)
+
+# plot
+ggplot(crime_per_year, aes(x = year, y = n)) + geom_line(size = 2, color = "blue") + ggtitle(label = "Total Reported Crime per Year for Milwaukee 2006-2018") + xlab("Year") + ylab("Total Crime Reported") + scale_x_continuous(breaks = c(2006, 2007, 2008, 2009, 2010, 2011, 2012, 2013, 2014, 2015, 2016, 2017, 2018)) + theme_bw()
+```
+
+Individual crimes across years
+```{r}
+# group by individual crimes per year, remove 2005 data
+crimes_year <- mke_melt %>% group_by(crime, year) %>% summarize(n=n()) %>% filter(year > 2005)
+ 
+# Facet plot
+ggplot(crimes_year, aes(x = year, y = n, color = crime)) + geom_line(size = 1.5) + ggtitle(label = "Total Crime Reports per Year by Crime Type") + labs(subtitle = "For Milwaukee 2006-2018") + xlab("Year") + ylab("Number of Reports") + scale_x_continuous(breaks = c(2006, 2010, 2014, 2018))+ theme_bw() + facet_wrap(~crime) + theme() +  theme(axis.text.x = element_text(angle = -45, hjust = 0.1), legend.position = "none", plot.subtitle = element_text(size = 10, face = "italic"))
+
+```
+
+
+################################# Weapons Visualizations ################################
+# Recategorize data to reduce the amount of weapons classes
+```{r}
+colnames(mke_melt)[17]<- "crime"
+
+weapons_used<- mke_melt[,c("WeaponUsed", "crime")]
+
+weapons_used <- weapons_used[weapons_used$WeaponUsed != "NONE",]
+weapons_used <- weapons_used[weapons_used$WeaponUsed != " ",]
+weapons_used <- weapons_used[weapons_used$WeaponUsed != "UNKNO",]
+
+# create 'not %in% operator:
+'%!in%' <- function(x,y)!('%in%'(x,y))
+
+weapons <- subset(weapons_used, subset = weapons_used$WeaponUsed %!in% c("NONE", "", "UNKNO"))
+
+# 915 weapons used categories: Filter down for clarity: 
+
+weapons$WeaponUsed[grepl("^ASPHY", weapons$WeaponUsed)] <- "asphyxiation"
+
+weapons$WeaponUsed[grepl("^BBBAT", weapons$WeaponUsed)] <- "baseball_bat"
+
+weapons$WeaponUsed[grepl("^BBGN|16", weapons$WeaponUsed)] <- "bb_gun"
+
+# no blunt/, only blunt object
+weapons$WeaponUsed[grepl("^BLUNT", weapons$WeaponUsed)] <- "blunt_object"
+
+weapons$WeaponUsed[grepl("^BRICK", weapons$WeaponUsed)] <- "brick"
+
+weapons$WeaponUsed[grepl("^BOTTL", weapons$WeaponUsed)] <- "bottle"
+
+weapons$WeaponUsed[grepl("^FIRE", weapons$WeaponUsed)] <- "fire"
+
+weapons$WeaponUsed[grepl("^FIREARM", weapons$WeaponUsed)] <- "firearm"
+
+weapons$WeaponUsed[grepl("^GUN", weapons$WeaponUsed)] <- "gun (unspecified)"
+
+weapons$WeaponUsed[grepl("^HANDG|^HANDGUN,", weapons$WeaponUsed)] <- "handgun"
+
+weapons$WeaponUsed[grepl("^HANDS", weapons$WeaponUsed)] <- "hands"
+
+weapons$WeaponUsed[grepl("^IMPLI", weapons$WeaponUsed)] <- "weapon implied"
+
+weapons$WeaponUsed[grepl("^KITUT", weapons$WeaponUsed)] <- "kitut"
+
+weapons$WeaponUsed[grepl("^KNIFE", weapons$WeaponUsed)] <- "knife"
+
+weapons$WeaponUsed[grepl("^LETHAL CUTTING INSTRUMENT", weapons$WeaponUsed)] <- "lethal_cutting_instrument"
+
+weapons$WeaponUsed[grepl("^PERSONAL WEAPON", weapons$WeaponUsed)] <- "personal_weapon"
+
+weapons$WeaponUsed[grepl("^OTHER", weapons$WeaponUsed)] <- "other"
+
+weapons$WeaponUsed[grepl("^SHTGN|SHOTGN|SHOTGUN", weapons$WeaponUsed)] <- "shotgun"
+
+weapons$WeaponUsed[grepl("^TOOLS", weapons$WeaponUsed)] <- "tools"
+
+weapons$WeaponUsed[grepl("^VEHIC|MOTOR VEHICLE", weapons$WeaponUsed)] <- "vehicle"
+
+weapons$WeaponUsed[grepl("^PEPPE", weapons$WeaponUsed)] <- "pepper_spray"
+
+# change all weapon category names to lower case for aesthetics
+weapons$WeaponUsed <- tolower(weapons$WeaponUsed)
+
+# Final working subset for weapons: 
+weapons
+```
+
+Organize weapons subset. Plot Frequency of weapon use per weapon
+```{r}
+# summarise by group
+weapon_category <- weapons %>% group_by(WeaponUsed) %>% summarise(n = n())
+weapon_category <- weapon_category[weapon_category$n > 100,] %>% filter(WeaponUsed != "unknown") %>% filter(WeaponUsed != "none/unkno") %>% filter(WeaponUsed != "unkno/tools")
+
+# plot the data
+ggplot(weapon_category, aes(x = reorder(WeaponUsed, n), y = n)) + geom_bar(stat = "identity", width = 0.6) + geom_text(data = weapon_category, aes(label = n), stat = "identity", hjust = -0.1, size = 3) + coord_flip()+xlab("Weapon Used")+ ylab("Number of Occurrences")+ ggtitle("Total Weapon Use in Crime for Milwaukee 2005-2018", subtitle = "For weapon categories containing 100 or more occurrences")+ theme_bw() +  theme(plot.subtitle=element_text(size=8, face="italic", color="black")) + expand_limits(y = 85000) 
+
+```
+
+Weapons plot II: weapon use per crime
+```{r}
+# organize subset
+weapon_crime <- weapons %>% group_by(WeaponUsed, crime) %>% summarise(n = n())
+weapon_crime <- weapon_crime[weapon_crime$n > 1000,]
+
+aes_cols <- c("#7f0099", "#018cb6", "#9c5dff", "#680027", "#e7b4ff", "#ff9491", "#54ffcc", "#fb0022", "#df0083","#018a60","006586","#7f0099", "#018cb6", "#9c5dff", "#680027", "#e7b4ff", "ff94b1", "#54ffcc", "#fb0022", "#df0083","#018a60","006586")
+
+ggplot(weapon_crime, aes(crime))+ geom_bar(aes( fill=WeaponUsed, y = n, colors = aes_cols), stat = "identity", width = 0.8) + theme(axis.text.x = element_text(angle=65, vjust=0.6))+ xlab("Crime Type") + ylab("Frequency of Weapon Use")  + labs(title="Weapon Use by Crime Type", subtitle="For Weapons Used 1,000 or more times") +theme(plot.subtitle=element_text(size=10, face="italic", color="black", hjust = 0.5))+ scale_fill_manual(values =  aes_cols)
+
+```
+
+###################### Visualizing Location-Based Data #######################
+# Note: all mapped data was initially explored with ggplotII and is available below. 
+#Ultimately, published maps were created utilizing kepler (https://kepler.gl/)
+
+# Geocoding via the privelages provided by Texas A & M Geocoding services: 
+```{r}
+# Selected options: census values (2010 census) and MatchedAddress
+# Started & Completed: 3/5/2019
+
+# Log of Texas A & M Geoservices Platform Status:
+
+#Platform Status
+#JSON
+#Current Status
+#Texas A&M GeoServices Platform is Healthy  
+#Last updated: today at 03:50
+#RSS · email
+#Issue History
+ 
+#July 22 at 5:24pm:
+#API issues resolved
+#The issue has been resolved and behavior should be back to normal.
+
+#API Health
+#Updated Wednesday, May 23, 2018 	2:28PM
+```
+
+# Load in geocoded data, subset, and filter:
+```{r}
+# create a subset of the data
+geo_data <- fread("mke_2018_geocoded_data.csv")
+
+#kepler_file <- geo_data[,c(1:29,60, 61)]
+#write.csv(kelper_file, file = "kelper_file.csv")
+
+# add in crime colun, see what happens
+geo_data <- geo_data[,c(1:29,60, 61)]
+
+
+# Melting geocoded data, select variables for mapping, filter by crimes that occurred,   #select the complete cases
+geo_data <- geo_data %>% dplyr::select(c(IncidentNum, 15:24, Latitude, Longitude)) 
+geo_data <- geo_data %>% melt(id.vars = c("IncidentNum", "Latitude", "Longitude"))
+colnames(geo_data)[4:5] <- c("Crime", "Logical")
+mke_geo <- geo_data %>% filter(Logical > 0)
+mke_geo <- mke_geo[complete.cases(mke_geo),]
+```
+
+#Set-up variables for plotting
+```{r}
+# plot setup
+lat <- mke_geo$Latitude
+lon <- mke_geo$Longitude
+crime <- mke_geo$Crime #### may need to be adjusted
+
+map_data <- data.frame(crime, lat, lon)
+colnames(map_data) <- c("crimes", "lat", "lon")
+
+write.csv(map_data, file = "map_data_2018.csv")
+mke_box <- make_bbox(lon = map_data$lon, lat = map_data$lat, f = 0.01)
+load("mke_map_color.rda")
+```
+
+Plot Baseline crime plot
+```{r}
+ggmap(mke_map_color) + geom_point(data = map_data, aes(x = lon, y = lat), color = "purple", size = 1, alpha = 0.01)+ xlab('Longitude') + ylab('Latitude') + ggtitle('Location of Crimes in Milwaukee for 2018')
+```
+
+Plot Crime Density
+```{r}
+# plot
+ggmap(mke_map_color) + stat_density2d(aes(fill = ..level..), alpha = 0.5, geom = "polygon", data = map_data) + scale_fill_viridis()+ xlab('Longitude') + ylab('Latitude') + ggtitle('Density Map: Major Crime Milwaukee 2018') 
+
+```
+
+# Locations of individual crimes faceted
+```{r}
+# Individual points
+ggmap(mke_map_color) + geom_point(data=map_data, aes(x = lon, y = lat), color = "purple", 
+             size = 1, alpha = 0.1) +
+  ggtitle('Location of Major Crimes in Milwaukee 2018') +
+  guides(color=FALSE) + facet_wrap(~ crimes, nrow = 2) + theme_void()+ scale_color_viridis() +theme(plot.subtitle=element_text(size=10, hjust = 0.05, face="italic", color="black"))
+
+# Density Map
+ggmap(mke_map_color) + stat_density2d(aes(fill = ..level..), alpha = 0.5, geom = "polygon", data = map_data) + scale_fill_viridis() + ggtitle('Density Map of Major Crimes in Milwaukee 2018')  + facet_wrap(.~crimes, nrow = 2)+ theme_void()+theme(plot.subtitle=element_text(size=10, hjust = 0.05, face="italic", color="black"))
+```
+
+### Clustering ###
+#Clustering with OPTICS from the DBSCAN package
+```{r}
+names(mke_geo)
+latlon_mke <- mke_geo[, c("Latitude", "Longitude", "Crime")]
+dim(latlon_mke) #original: 35140 -> 35132 # removed 8 values 
+latlon_mke <- filter(latlon_mke, Longitude > -89)
+```
+
+#OPTICS Clustering
+```{r}
+#Run OPTICS clustering (Ordering points to identify the clustering structure)
+# minPts= 1000; optics will only ID clusters with 1000 or more points
+res <- optics(latlon_mke[,c(1:2)], eps = 0.4, minPts = 1000)
+
+#The density-based order produced by OPTICS plotted as a reachability plot 
+plot(res, ylim = c(0,0.04))  
+
+# visualize the order on the original data sets
+plot(latlon_mke, col = "grey")
+
+# Reachability plots and hull plots were visualized were for xi values ranging from 0.002 #to 0.005 until the cluster number converged with the number of clusters identified by the user on the reachability plot. xi = 0.0037:
+res1 <- extractXi(res, xi = 0.0037)
+res1$clusters_xi
+
+# Reachability plot
+reach_plot <- plot(res1) 
+
+# hullplot
+hull_plot <- hullplot(latlon_mke[,c(1,2)], res1)
+```
+
+#Visualize clusters on a map of MKE
+```{r}
+# take latlon_mke and label into clusters
+mke_clust <- cbind(latlon_mke, res1$cluster)
+colnames(mke_clust)<- c("lat", "lon","crime", "cluster")
+mke_clust$cluster <- as.factor(mke_clust$cluster)
+
+mke_clust <- filter(mke_clust, cluster != 0) # one '0' value
+clust1 <- filter(mke_clust, cluster == 1)
+
+# write copy for use in kepler 
+write.csv(mke_clust, file = "mke_clust_2018.csv")
+
+# calculate cluster centers
+centers <- mke_clust %>% group_by(cluster) %>% summarize_all(mean)
+
+# Create a table to display cluster center location and incident count
+counts <- mke_clust %>% group_by(cluster) %>% summarize(n = n())
+
+# Manually add local identifiers representing the center of each cluster
+loc_id <- data.frame("Local Identifier" = c("Roosevelt Grove", "Concordia", "N Milwaukee St + E Juneau Ave", "Burnham St + S 16th St"))
+clust_table <- cbind(counts,loc_id, centers[2:3])
+colnames(clust_table) <- c("Cluster", "# Incidents","Local Identifier", "Lat", "Lon")
+
+sum(clust_table[2:4, "# Incidents"]) #these 3 clusters (exclude 1) account for 9460 crimes
+# close to 1/3 of the crimes in MKE in 2018 occurred in these 3 clusters.
+
+clust_table <- cbind(clust_table, loc_id)
+clust_table # Identifies the center of each cluster
+
+# Create a clust-table file for use in kepler to label cluster centers
+write.csv(clust_table, file = "clust_table.csv")
+```
+
+#Plot the Clusters
+```{r}
+# plot  
+mke_clust1 <- filter(mke_clust, cluster != 1)
+ggmap(mke_map_color)+ geom_point(data = mke_clust, aes(x = lon, y = lat, color = cluster), size = 0.7, alpha = 0.06) + xlab('Longitude') + ylab('Latitude') + ggtitle('Crime Clusters Milwaukee 2018') + labs(color = "Cluster\n") 
+
+cols <- c("red", "green4", "blue", "cyan2")
+
+ggmap(mke_map_color)+ geom_point(data = clust1, aes(x = lon, y = lat, color = cluster), size = 0.7, alpha = 0.2) + geom_point(data = mke_clust1, aes(x = lon, y = lat, color =cluster), size = 0.7, alpha = 0.3)+ 
+  xlab('Longitude') + ylab('Latitude') + ggtitle('Crime Clusters for Milwaukee in 2018') + 
+  labs(subtitle = "Points clustered according to latitude & longitude values", color = "Cluster\n")+ scale_color_manual(values= cols)+guides(colour = guide_legend(override.aes = list(size=6, alpha = 1 )))+                          theme(plot.subtitle = element_text( face = "italic", size=10, hjust = 0.0, color="black"))#+ guides(point = guide_legend(override.aes= list(alpha = 1)))
+
+```
