@@ -1,0 +1,63 @@
+column,type,label,description
+IncidentNum,text,Incident Number ,"A reference number used by police when officially recording a particular crime.
+"
+ReportedDateTime,text,Creation Date ,This is the date the offense was recorded. 
+Location,text,,"The street address where the offense was committed. 
+"
+WeaponUsed,text,,
+ALD,text,Aldermanic District ,"District 1: Ashanti Hamilton
+
+District 2: Cavalier Johnson
+
+District 3: Nicholas Kovac
+
+District 4: Robert Bauman
+
+District 5: James Bohl, Jr.
+
+District 6: Milele A. Coggs
+
+District 7: Khalif J. Rainey
+
+District 8: Robert G. Donovan
+
+District 9: Chantia Lewis
+
+District 10: Michael J. Murphy
+
+District 11: Mark A. Borkowski
+
+District 12: José G. Pérez
+
+District 13: Terry L. Witkowski
+
+District 14: T. Anthony Zielinski
+
+District 15: Russell W. Stamper, II"
+NSP,text,Neighborhood Strategic Planning,Neighborhood Strategic Planning areas. 
+POLICE,text,Police District ,There are 7 police districts located throughout the City of Milwaukee. Each district is assigned a number. 
+TRACT,text,Census Tract,US Census Bureau census tract boundary
+WARD,text,Ward,The city of Milwaukee voting ward boundaries
+ZIP,text,Zip Code ,ZIP Codes are a system of postal codes used by the United States Postal Service (USPS) since 1963. 
+RoughX,text,,Rough X location of case. Offset for privacy.
+RoughY,text,,Rough Y location of case. Offset for privacy.
+Arson,text,,"Any willful or malicious burning or attempt to burn, with or without intent to defraud, a dwelling house, public building, motor vehicle or aircraft, personal property of another, etc.
+"
+AssaultOffense,text,Aggravated Assault,"An attack by one person upon another for the purpose of inflicting severe injury. This type of assault usually is accompanied by the use of a weapon or by means likely to produce death or injury.
+"
+Burglary,text,Burglary (breaking or entering),"The unlawful entry of a structure to commit a felony or a theft.  Attempted forcible entry is included.
+"
+CriminalDamage,text,Criminal Damage to Property,"Willfully injuring, damaging, mutilating, defacing, destroying or substantially impairing the use of any property in which another has an interest without the consent of such other person.
+"
+Homicide,text,Criminal homicide,"Murder and non-negligent manslaughter:  the willful (non-negligent) killing of one human being by another.  Deaths caused by negligence, attempts to kill, assaults to kill, suicides, and accidental deaths are excluded.  The program classifies justifiable homicides separately and limits the definition to:  (1) the killing of a felon by a law enforcement officer in the line of duty; or (2) the killing of a felon, during the commission of a felony, by a private citizen.  b.) Manslaughter by negligence:  the killing of another person through gross negligence.  Deaths of persons due to their own negligence, accidental deaths not resulting from gross negligence, and traffic fatalities are not included in the category Manslaughter by Negligence.
+"
+LockedVehicle,text,Locked Vehicle Entry,"Whoever intentionally enters the locked and enclosed portion or compartment of the vehicle of another without consent and with intent to steal.
+"
+Robbery,text,,"The taking or attempting to take anything of value from the care, custody, or control of a person or persons by force or threat of force or violence and/or by putting the victim in fear.
+"
+SexOffense,text,"Sex offenses (except forcible rape, prostitution, and commercialized vice)","Offenses against chastity, common decency, morals, and the like.  Incest, indecent exposure, and statutory rape are included.  Attempts are included.
+"
+Theft,text,Larceny-theft (except motor vehicle theft),"The unlawful taking, carrying, leading, or riding away of property from the possession or constructive possession of another. Examples are thefts of bicycles, motor vehicle parts and accessories, shoplifting, pocket-picking, or the stealing of any property or article that is not taken by force and violence or by fraud. Attempted larcenies are included. Embezzlement, confidence games, forgery, check fraud, etc., are excluded.
+"
+VehicleTheft,text,Motor vehicle theft,"The theft or attempted theft of a motor vehicle.  A motor vehicle is self-propelled and runs on land surface and not on rails.  Motorboats, construction equipment, airplanes, and farming equipment are specifically excluded from this category.
+"
