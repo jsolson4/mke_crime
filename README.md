@@ -17,6 +17,8 @@ Analyses are contained within three sections of the code and appear in sequentia
 Initially, exploratory geospatial maps were creating utilizing ggmaps and the ggplot system are included in the code. 
 Specific subsets of code were downloaded as .csv files and then uploaded to [kepler.gl](https://kepler.gl/) where the final maps images were produced.
 Links to interactive versions of the maps, included the data used to create the figure may be found in the figure captions within the Medium article.
+### mke_data_dictionary 
+Contains a description of the variables in the data set. Also available [here](https://data.milwaukee.gov/dataset/wibr/resource/87843297-a6fa-46d4-ba5d-cb342fb2d3bb).
 
 ### WeaponUsed_Classification_Process
 Contains a description of the process of taking 915 different WeaponsUsed classifications and condensing them down to 24 categories. 
