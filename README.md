@@ -22,3 +22,10 @@ Contains a description of the variables in the data set. Also available [here](h
 
 ### WeaponUsed_Classification_Process
 Contains a description of the process of taking 915 different WeaponsUsed classifications and condensing them down to 24 categories. 
+
+
+### map data 2018
+The dataset was uploaded to kepler.gl for map creation of the hexagonal denisty mappings. This data set contains the variables crime, latitude, and longitude. You can use this data to recreate the mapping from the Medium article. 
+
+### mke_clust_2018 & clust_table_edited 
+These tables contain the data that was uploaded to kepler.gl for map creation of the cluster data. mke_clust_2018 contains the latitude, longitude, and cluster labels, while clust_table_edited contains the icon assignments and mappings for the approximate cluster centers. You can use this data to recreate the mapping from the Medium article. 
